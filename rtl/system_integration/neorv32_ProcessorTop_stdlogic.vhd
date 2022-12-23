@@ -144,6 +144,7 @@ entity neorv32_ProcessorTop_stdlogic is
     wb_cyc_o       : out std_logic; -- valid cycle
     wb_ack_i       : in  std_logic := '0'; -- transfer acknowledge
     wb_err_i       : in  std_logic := '0'; -- transfer error
+	 wb_stall_i     : in std_logic := '0';
     -- Advanced memory control signals (available if MEM_EXT_EN = true) --
     fence_o        : out std_logic; -- indicates an executed FENCE operation
     fencei_o       : out std_logic; -- indicates an executed FENCEI operation
@@ -231,6 +232,7 @@ architecture neorv32_ProcessorTop_stdlogic_rtl of neorv32_ProcessorTop_stdlogic 
   signal wb_cyc_o_int    : std_ulogic;
   signal wb_ack_i_int    : std_ulogic;
   signal wb_err_i_int    : std_ulogic;
+  signal wb_stall_i_int  : std_ulogic;
   --
   signal fence_o_int     : std_ulogic;
   signal fencei_o_int    : std_ulogic;
@@ -392,6 +394,7 @@ begin
     wb_cyc_o       => wb_cyc_o_int,    -- valid cycle
     wb_ack_i       => wb_ack_i_int,    -- transfer acknowledge
     wb_err_i       => wb_err_i_int,    -- transfer error
+	 wb_stall_i     => wb_stall_i_int,
     -- Advanced memory control signals (available if MEM_EXT_EN = true) --
     fence_o        => fence_o_int,     -- indicates an executed FENCE operation
     fencei_o       => fencei_o_int,    -- indicates an executed FENCEI operation
@@ -471,6 +474,7 @@ begin
   wb_cyc_o        <= std_logic(wb_cyc_o_int);
   wb_ack_i_int    <= std_ulogic(wb_ack_i);
   wb_err_i_int    <= std_ulogic(wb_err_i);
+  wb_stall_i_int  <= std_ulogic(wb_stall_i);
 
   fence_o         <= std_logic(fence_o_int);
   fencei_o        <= std_logic(fencei_o_int);

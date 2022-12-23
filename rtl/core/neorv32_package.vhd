@@ -1092,6 +1092,7 @@ package neorv32_package is
       wb_cyc_o       : out std_ulogic; -- valid cycle
       wb_ack_i       : in  std_ulogic := 'L'; -- transfer acknowledge
       wb_err_i       : in  std_ulogic := 'L'; -- transfer error
+	  wb_stall_i     : in std_ulogic := '0';
       -- Advanced memory control signals --
       fence_o        : out std_ulogic; -- indicates an executed FENCE operation
       fencei_o       : out std_ulogic; -- indicates an executed FENCEI operation
@@ -1949,7 +1950,8 @@ package neorv32_package is
       wb_stb_o   : out std_ulogic; -- strobe
       wb_cyc_o   : out std_ulogic; -- valid cycle
       wb_ack_i   : in  std_ulogic; -- transfer acknowledge
-      wb_err_i   : in  std_ulogic  -- transfer error
+      wb_err_i   : in  std_ulogic;  -- transfer error
+	  wb_stall_i : in std_ulogic := '0'
     );
   end component;
 

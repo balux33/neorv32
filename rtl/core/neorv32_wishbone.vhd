@@ -65,7 +65,7 @@ entity neorv32_wishbone is
     PIPE_MODE         : boolean; -- protocol: false=classic/standard wishbone mode, true=pipelined wishbone mode
     BIG_ENDIAN        : boolean; -- byte order: true=big-endian, false=little-endian
     ASYNC_RX          : boolean; -- use register buffer for RX data when false
-    ASYNC_TX          : boolean  -- use register buffer for TX data when false
+    ASYNC_TX          : boolean  -- use register buffer for TX data when false  --async_tx with pipelined mode with stall not supported!!!!
   );
   port (
     -- global control --
@@ -97,7 +97,8 @@ entity neorv32_wishbone is
     wb_stb_o   : out std_ulogic; -- strobe
     wb_cyc_o   : out std_ulogic; -- valid cycle
     wb_ack_i   : in  std_ulogic; -- transfer acknowledge
-    wb_err_i   : in  std_ulogic  -- transfer error
+    wb_err_i   : in  std_ulogic;  -- transfer error
+	wb_stall_i : in std_ulogic := '0'
   );
 end neorv32_wishbone;
 
@@ -141,6 +142,8 @@ architecture neorv32_wishbone_rtl of neorv32_wishbone is
   -- async RX gating --
   signal ack_gated   : std_ulogic;
   signal rdata_gated : std_ulogic_vector(31 downto 0);
+  
+  signal stb_int_pipe : std_logic;
 
 begin
 
@@ -191,9 +194,10 @@ begin
       ctrl.tmo      <= '0';
       ctrl.src      <= '0';
       ctrl.priv     <= '0';
+	  stb_int_pipe  <= '0';
     elsif rising_edge(clk_i) then
       -- defaults --
-      ctrl.state_ff <= ctrl.state;
+      ctrl.state_ff <= ctrl.state AND (NOT wb_stall_i);
       ctrl.rdat     <= (others => '0'); -- required for internal output gating
       ctrl.ack      <= '0';
       ctrl.err      <= '0';
@@ -203,6 +207,7 @@ begin
       -- state machine --
       if (ctrl.state = '0') then -- IDLE, waiting for host request
         -- ------------------------------------------------------------
+		stb_int_pipe  <= '0';
         if (xbus_access = '1') and ((wren_i or rden_i) = '1') then -- valid external request
           -- buffer (and gate) all outgoing signals --
           ctrl.we    <= wren_i;
@@ -212,20 +217,28 @@ begin
           ctrl.wdat  <= end_wdata;
           ctrl.sel   <= end_byteen;
           ctrl.state <= '1';
+		  stb_int_pipe <= '1';
         end if;
 
       else -- BUSY, transfer in progress
         -- ------------------------------------------------------------
         ctrl.rdat <= wb_dat_i;
+		
+		if (wb_stall_i = '0' and stb_int_pipe = '1') then  --first cycle with wb_stall_i low -> valid transfer, deasert strobe
+			stb_int_pipe  <= '0';
+		end if;
         if (wb_err_i = '1') then -- abnormal bus termination
           ctrl.err   <= '1';
           ctrl.state <= '0';
+		  stb_int_pipe  <= '0';
         elsif (timeout_en_c = true) and (or_reduce_f(ctrl.timeout) = '0') then -- enabled timeout
           ctrl.tmo   <= '1';
           ctrl.state <= '0';
+		  stb_int_pipe  <= '0';
         elsif (wb_ack_i = '1') then -- normal bus termination
           ctrl.ack   <= '1';
           ctrl.state <= '0';
+		  stb_int_pipe  <= '0';
         end if;
         -- timeout counter --
         if (timeout_en_c = true) then
@@ -259,7 +272,7 @@ begin
   wb_tag_o(1) <= '0'; -- 0 = secure, 1 = non-secure
   wb_tag_o(2) <= src_i when (ASYNC_TX = true) else ctrl.src; -- 0 = data access, 1 = instruction access
 
-  stb_int <=  (xbus_access and (wren_i or rden_i))                when (ASYNC_TX = true) else (ctrl.state and (not ctrl.state_ff));
+  stb_int <=  (xbus_access and (wren_i or rden_i))                when (ASYNC_TX = true) else stb_int_pipe; 
   cyc_int <= ((xbus_access and (wren_i or rden_i)) or ctrl.state) when (ASYNC_TX = true) else  ctrl.state;
 
   wb_adr_o <= addr_i when (ASYNC_TX = true) else ctrl.adr;

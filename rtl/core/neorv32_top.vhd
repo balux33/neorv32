@@ -164,6 +164,7 @@ entity neorv32_top is
     wb_cyc_o       : out std_ulogic; -- valid cycle
     wb_ack_i       : in  std_ulogic := 'L'; -- transfer acknowledge
     wb_err_i       : in  std_ulogic := 'L'; -- transfer error
+	 wb_stall_i     : in  std_ulogic := '0';
 
     -- Advanced memory control signals --
     fence_o        : out std_ulogic; -- indicates an executed FENCE operation
@@ -930,7 +931,8 @@ begin
       wb_stb_o   => wb_stb_o,                      -- strobe
       wb_cyc_o   => wb_cyc_o,                      -- valid cycle
       wb_ack_i   => wb_ack_i,                      -- transfer acknowledge
-      wb_err_i   => wb_err_i                       -- transfer error
+      wb_err_i   => wb_err_i,                       -- transfer error
+		wb_stall_i => wb_stall_i
     );
   end generate;
 

@@ -133,12 +133,6 @@ begin
     -- shifter core --
     barrel_shifter_core: process(rs1_i, shamt_i, ctrl_i, bs_level)
     begin
-      -- input layer: convert left shifts to right shifts by reversing --
-      if (ctrl_i(ctrl_ir_funct3_2_c) = '0') then -- is left shift?
-        bs_level(index_size_f(XLEN)) <= bit_rev_f(rs1_i); -- reverse bit order of input operand
-      else
-        bs_level(index_size_f(XLEN)) <= rs1_i;
-      end if;
       -- shifter array (right-shifts only) --
       for i in (index_size_f(XLEN)-1) downto 0 loop
         if (shamt_i(i) = '1') then
@@ -148,6 +142,13 @@ begin
           bs_level(i) <= bs_level(i+1);
         end if;
       end loop;
+		
+	 -- input layer: convert left shifts to right shifts by reversing --  --ISE 14.7 need to place this after shifter loop! Why?
+      if (ctrl_i(ctrl_ir_funct3_2_c) = '0') then -- is left shift?
+        bs_level(index_size_f(XLEN)) <= bit_rev_f(rs1_i); -- reverse bit order of input operand
+      else
+        bs_level(index_size_f(XLEN)) <= rs1_i;
+      end if;
     end process barrel_shifter_core;
 
     -- pipeline register --
@@ -166,6 +167,7 @@ begin
     valid_o <= start_i;
 
   end generate; -- /barrel_shifter
+  
 
 
 end neorv32_cpu_cp_shifter_rtl;

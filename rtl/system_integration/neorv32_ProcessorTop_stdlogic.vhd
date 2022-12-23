@@ -115,7 +115,7 @@ entity neorv32_ProcessorTop_stdlogic is
     IO_TRNG_EN                   : boolean := false;  -- implement true random number generator (TRNG)?
     IO_TRNG_FIFO                 : natural := 1;      -- TRNG fifo depth, has to be a power of two, min 1
     IO_CFS_EN                    : boolean := false;  -- implement custom functions subsystem (CFS)?
-    IO_CFS_CONFIG                : std_ulogic_vector(31 downto 0); -- custom CFS configuration generic
+    IO_CFS_CONFIG                : std_ulogic_vector(31 downto 0):= (others => '0'); -- custom CFS configuration generic
     IO_CFS_IN_SIZE               : positive := 32;    -- size of CFS input conduit in bits
     IO_CFS_OUT_SIZE              : positive := 32;    -- size of CFS output conduit in bits
     IO_NEOLED_EN                 : boolean := true;   -- implement NeoPixel-compatible smart LED interface (NEOLED)?
@@ -241,13 +241,13 @@ architecture neorv32_ProcessorTop_stdlogic_rtl of neorv32_ProcessorTop_stdlogic 
   signal xip_sdo_o_int   : std_ulogic;
   --
   signal slink_tx_dat_o_int : sdata_8x32_t;
-  signal slink_tx_val_o_int : std_logic_vector(7 downto 0);
-  signal slink_tx_rdy_i_int : std_logic_vector(7 downto 0);
-  signal slink_tx_lst_o_int : std_logic_vector(7 downto 0);
+  signal slink_tx_val_o_int : std_ulogic_vector(7 downto 0);
+  signal slink_tx_rdy_i_int : std_ulogic_vector(7 downto 0);
+  signal slink_tx_lst_o_int : std_ulogic_vector(7 downto 0);
   signal slink_rx_dat_i_int : sdata_8x32_t;
-  signal slink_rx_val_i_int : std_logic_vector(7 downto 0);
-  signal slink_rx_rdy_o_int : std_logic_vector(7 downto 0);
-  signal slink_rx_lst_i_int : std_logic_vector(7 downto 0);
+  signal slink_rx_val_i_int : std_ulogic_vector(7 downto 0);
+  signal slink_rx_rdy_o_int : std_ulogic_vector(7 downto 0);
+  signal slink_rx_lst_i_int : std_ulogic_vector(7 downto 0);
   --
   signal gpio_o_int      : std_ulogic_vector(63 downto 0);
   signal gpio_i_int      : std_ulogic_vector(63 downto 0);

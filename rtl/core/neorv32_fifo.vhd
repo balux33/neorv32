@@ -127,7 +127,7 @@ begin
 
   -- FIFO Status ----------------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
-  fifo.match <= '1' when (fifo.r_pnt(fifo.r_pnt'left-1 downto 0) = fifo.w_pnt(fifo.w_pnt'left-1 downto 0)) or (FIFO_DEPTH = 1) else '0';
+  fifo.match <= '1' when (FIFO_DEPTH = 1) or (fifo.r_pnt(fifo.r_pnt'left-1 downto 0) = fifo.w_pnt(fifo.w_pnt'left-1 downto 0)) else '0';
   fifo.full  <= '1' when (fifo.r_pnt(fifo.r_pnt'left) /= fifo.w_pnt(fifo.w_pnt'left)) and (fifo.match = '1') else '0';
   fifo.empty <= '1' when (fifo.r_pnt(fifo.r_pnt'left)  = fifo.w_pnt(fifo.w_pnt'left)) and (fifo.match = '1') else '0';
 

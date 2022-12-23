@@ -249,14 +249,14 @@ architecture neorv32_cpu_control_rtl of neorv32_cpu_control is
   signal ctrl_nxt, ctrl : std_ulogic_vector(ctrl_width_c-1 downto 0);
 
   -- RISC-V control and status registers (CSRs) --
-  type pmpcfg_t       is array (0 to PMP_NUM_REGIONS-1) of std_ulogic_vector(7 downto 0);
+  type pmpcfg_t       is array (0 to PMP_NUM_REGIONS) of std_ulogic_vector(7 downto 0); --removed -1 to compile with ise 14.7 with PMP_NUM_REGIONS = 0
   type pmpcfg_rd_t    is array (0 to 3) of std_ulogic_vector(31 downto 0);
-  type pmpaddr_t      is array (0 to PMP_NUM_REGIONS-1) of std_ulogic_vector(XLEN-3 downto index_size_f(PMP_MIN_GRANULARITY)-2);
-  type mhpmevent_t    is array (0 to HPM_NUM_CNTS-1) of std_ulogic_vector(hpmcnt_event_size_c-1 downto 0);
+  type pmpaddr_t      is array (0 to PMP_NUM_REGIONS) of std_ulogic_vector(XLEN-3 downto index_size_f(PMP_MIN_GRANULARITY)-2);  --removed -1 to compile with ise 14.7 with PMP_NUM_REGIONS = 0
+  type mhpmevent_t    is array (0 to HPM_NUM_CNTS) of std_ulogic_vector(hpmcnt_event_size_c-1 downto 0);  --removed -1 to compile with ise 14.7 with HPM_NUM_CNTS = 0 (ise does not support zero size array?)what is the correct way to fix this?
   type mhpmevent_rd_t is array (0 to 28) of std_ulogic_vector(XLEN-1 downto 0);
-  type mhpmcnt_t      is array (0 to HPM_NUM_CNTS-1) of std_ulogic_vector(XLEN-1 downto 0);
-  type mhpmcnt_nxt_t  is array (0 to HPM_NUM_CNTS-1) of std_ulogic_vector(XLEN downto 0);
-  type mhpmcnt_ovfl_t is array (0 to HPM_NUM_CNTS-1) of std_ulogic_vector(0 downto 0);
+  type mhpmcnt_t      is array (0 to HPM_NUM_CNTS) of std_ulogic_vector(XLEN-1 downto 0);   --removed -1 to compile with ise 14.7 with HPM_NUM_CNTS = 0
+  type mhpmcnt_nxt_t  is array (0 to HPM_NUM_CNTS) of std_ulogic_vector(XLEN downto 0);     --removed -1 to compile with ise 14.7 with HPM_NUM_CNTS = 0
+  type mhpmcnt_ovfl_t is array (0 to HPM_NUM_CNTS) of std_ulogic_vector(0 downto 0);        --removed -1 to compile with ise 14.7 with HPM_NUM_CNTS = 0
   type mhpmcnt_rd_t   is array (0 to 29) of std_ulogic_vector(XLEN-1 downto 0);
   type csr_t is record
     addr              : std_ulogic_vector(11 downto 0); -- csr address
@@ -286,7 +286,7 @@ architecture neorv32_cpu_control_rtl of neorv32_cpu_control is
     --
     mcountinhibit_cy  : std_ulogic; -- mcounterinhibit.cy: inhibit auto-increment for [m]cycle[h]
     mcountinhibit_ir  : std_ulogic; -- mcounterinhibit.ir: inhibit auto-increment for [m]instret[h]
-    mcountinhibit_hpm : std_ulogic_vector(HPM_NUM_CNTS-1 downto 0); -- mcounterinhibit.hpm3: inhibit auto-increment for mhpmcounterx[h]
+    mcountinhibit_hpm : std_ulogic_vector(HPM_NUM_CNTS downto 0); -- mcounterinhibit.hpm3: inhibit auto-increment for mhpmcounterx[h]   --removed -1 to compile with ise 14.7 with HPM_NUM_CNTS = 0
     --
     privilege         : std_ulogic; -- current privilege mode
     privilege_eff     : std_ulogic; -- current *effective* privilege mode
@@ -2025,11 +2025,13 @@ begin
     pmp_addr_o    <= (others => (others => '0'));
     pmp_ctrl_o    <= (others => (others => '0'));
     csr.pmpcfg_rd <= (others => (others => '0'));
-    for i in 0 to PMP_NUM_REGIONS-1 loop
-      pmp_addr_o(i)(XLEN-1 downto index_size_f(PMP_MIN_GRANULARITY)) <= csr.pmpaddr(i);
-      pmp_ctrl_o(i) <= csr.pmpcfg(i);
-      csr.pmpcfg_rd(i/4)(8*(i mod 4)+7 downto 8*(i mod 4)+0) <= csr.pmpcfg(i);
-    end loop;
+	 if (PMP_NUM_REGIONS > 0) then
+		 for i in 0 to PMP_NUM_REGIONS-1 loop
+			pmp_addr_o(i)(XLEN-1 downto index_size_f(PMP_MIN_GRANULARITY)) <= csr.pmpaddr(i);
+			pmp_ctrl_o(i) <= csr.pmpcfg(i);
+			csr.pmpcfg_rd(i/4)(8*(i mod 4)+7 downto 8*(i mod 4)+0) <= csr.pmpcfg(i);
+		 end loop;
+	 end if;
   end process pmp_connect;
 
 
@@ -2440,33 +2442,35 @@ begin
 
 
       -- [machine] hardware performance monitors (counters) --
-      for i in 0 to HPM_NUM_CNTS-1 loop
+		if (HPM_NUM_CNTS > 0) then
+			for i in 0 to HPM_NUM_CNTS-1 loop
 
-        -- [m]hpmcounter* --
-        if (hpm_cnt_lo_width_c > 0) and (CPU_EXTENSION_RISCV_Zihpm = true) then
-          csr.mhpmcounter_ovfl(i)(0) <= csr.mhpmcounter_nxt(i)(csr.mhpmcounter_nxt(i)'left) and (not csr.mcountinhibit_hpm(i)) and hpmcnt_trigger(i);
-          if (cnt_csr_we.hpm(0)(i) = '1') then -- write access
-            csr.mhpmcounter(i)(hpm_cnt_lo_width_c-1 downto 0) <= cnt_csr_we.wdata(hpm_cnt_lo_width_c-1 downto 0);
-          elsif (csr.mcountinhibit_hpm(i) = '0') and (hpmcnt_trigger(i) = '1') then -- non-inhibited automatic update (and not in debug mode)
-            csr.mhpmcounter(i)(hpm_cnt_lo_width_c-1 downto 0) <= csr.mhpmcounter_nxt(i)(hpm_cnt_lo_width_c-1 downto 0);
-          end if;
-        else
-          csr.mhpmcounter_ovfl(i) <= (others => '0');
-          csr.mhpmcounter(i)      <= (others => '0');
-        end if;
+			  -- [m]hpmcounter* --
+			  if (hpm_cnt_lo_width_c > 0) and (CPU_EXTENSION_RISCV_Zihpm = true) then
+				 csr.mhpmcounter_ovfl(i)(0) <= csr.mhpmcounter_nxt(i)(csr.mhpmcounter_nxt(i)'left) and (not csr.mcountinhibit_hpm(i)) and hpmcnt_trigger(i);
+				 if (cnt_csr_we.hpm(0)(i) = '1') then -- write access
+					csr.mhpmcounter(i)(hpm_cnt_lo_width_c-1 downto 0) <= cnt_csr_we.wdata(hpm_cnt_lo_width_c-1 downto 0);
+				 elsif (csr.mcountinhibit_hpm(i) = '0') and (hpmcnt_trigger(i) = '1') then -- non-inhibited automatic update (and not in debug mode)
+					csr.mhpmcounter(i)(hpm_cnt_lo_width_c-1 downto 0) <= csr.mhpmcounter_nxt(i)(hpm_cnt_lo_width_c-1 downto 0);
+				 end if;
+			  else
+				 csr.mhpmcounter_ovfl(i) <= (others => '0');
+				 csr.mhpmcounter(i)      <= (others => '0');
+			  end if;
 
-        -- [m]hpmcounter*h --
-        if (hpm_cnt_hi_width_c > 0) and (CPU_EXTENSION_RISCV_Zihpm = true) then
-          if (cnt_csr_we.hpm(1)(i) = '1') then -- write access
-            csr.mhpmcounterh(i)(hpm_cnt_hi_width_c-1 downto 0) <= cnt_csr_we.wdata(hpm_cnt_hi_width_c-1 downto 0);
-          else -- automatic update
-            csr.mhpmcounterh(i)(hpm_cnt_hi_width_c-1 downto 0) <= std_ulogic_vector(unsigned(csr.mhpmcounterh(i)(hpm_cnt_hi_width_c-1 downto 0)) + unsigned(csr.mhpmcounter_ovfl(i)));
-          end if;
-        else
-          csr.mhpmcounterh(i) <= (others => '0');
-        end if;
+			  -- [m]hpmcounter*h --
+			  if (hpm_cnt_hi_width_c > 0) and (CPU_EXTENSION_RISCV_Zihpm = true) then
+				 if (cnt_csr_we.hpm(1)(i) = '1') then -- write access
+					csr.mhpmcounterh(i)(hpm_cnt_hi_width_c-1 downto 0) <= cnt_csr_we.wdata(hpm_cnt_hi_width_c-1 downto 0);
+				 else -- automatic update
+					csr.mhpmcounterh(i)(hpm_cnt_hi_width_c-1 downto 0) <= std_ulogic_vector(unsigned(csr.mhpmcounterh(i)(hpm_cnt_hi_width_c-1 downto 0)) + unsigned(csr.mhpmcounter_ovfl(i)));
+				 end if;
+			  else
+				 csr.mhpmcounterh(i) <= (others => '0');
+			  end if;
 
-      end loop; -- i
+			end loop; -- i
+		end if;
 
     end if;
   end process csr_counters;
@@ -2476,9 +2480,10 @@ begin
   csr.minstret_nxt <= std_ulogic_vector(unsigned('0' & csr.minstret) + 1);
 
   -- hpm counter increment LOW --
+
   hmp_cnt_lo_inc:
   for i in 0 to HPM_NUM_CNTS-1 generate
-    csr.mhpmcounter_nxt(i) <= std_ulogic_vector(unsigned('0' & csr.mhpmcounter(i)) + 1);
+	 csr.mhpmcounter_nxt(i) <= std_ulogic_vector(unsigned('0' & csr.mhpmcounter(i)) + 1);
   end generate;
 
   -- hpm counter read --

@@ -111,15 +111,15 @@ architecture neorv32_cpu_bus_rtl of neorv32_cpu_bus is
 
   -- physical memory protection --
   type pmp_t is record
-    i_cmp_ge : std_ulogic_vector(PMP_NUM_REGIONS-1 downto 0);
-    i_cmp_lt : std_ulogic_vector(PMP_NUM_REGIONS-1 downto 0);
-    d_cmp_ge : std_ulogic_vector(PMP_NUM_REGIONS-1 downto 0);
-    d_cmp_lt : std_ulogic_vector(PMP_NUM_REGIONS-1 downto 0);
-    i_match  : std_ulogic_vector(PMP_NUM_REGIONS-1 downto 0);
-    d_match  : std_ulogic_vector(PMP_NUM_REGIONS-1 downto 0);
-    perm_ex  : std_ulogic_vector(PMP_NUM_REGIONS-1 downto 0);
-    perm_rd  : std_ulogic_vector(PMP_NUM_REGIONS-1 downto 0);
-    perm_wr  : std_ulogic_vector(PMP_NUM_REGIONS-1 downto 0);
+    i_cmp_ge : std_ulogic_vector(PMP_NUM_REGIONS downto 0);       --removed -1 to compile with ise 14.7 with PMP_NUM_REGIONS = 0
+    i_cmp_lt : std_ulogic_vector(PMP_NUM_REGIONS downto 0);
+    d_cmp_ge : std_ulogic_vector(PMP_NUM_REGIONS downto 0);
+    d_cmp_lt : std_ulogic_vector(PMP_NUM_REGIONS downto 0);
+    i_match  : std_ulogic_vector(PMP_NUM_REGIONS downto 0);
+    d_match  : std_ulogic_vector(PMP_NUM_REGIONS downto 0);
+    perm_ex  : std_ulogic_vector(PMP_NUM_REGIONS downto 0);
+    perm_rd  : std_ulogic_vector(PMP_NUM_REGIONS downto 0);
+    perm_wr  : std_ulogic_vector(PMP_NUM_REGIONS downto 0);
     if_fault : std_ulogic;
     ld_fault : std_ulogic;
     st_fault : std_ulogic;
@@ -424,65 +424,71 @@ begin
   -- check address --
   pmp_check_address: process(fetch_pc_i, addr_i, pmp_addr_i)
   begin
-    for r in 0 to PMP_NUM_REGIONS-1 loop
-      if (r = 0) then -- first entry: use ZERO as base and current entry as bound
-        pmp.i_cmp_ge(r) <= '1'; -- address is always greater than or equal to zero
-        pmp.i_cmp_lt(r) <= '0'; -- unused
-        pmp.d_cmp_ge(r) <= '1'; -- address is always greater than or equal to zero
-        pmp.d_cmp_lt(r) <= '0'; -- unused
-      else -- use previous entry as base and current entry as bound
-        pmp.i_cmp_ge(r) <= bool_to_ulogic_f(unsigned(fetch_pc_i(XLEN-1 downto pmp_lsb_c)) >= unsigned(pmp_addr_i(r-1)(XLEN-1 downto pmp_lsb_c)));
-        pmp.i_cmp_lt(r) <= bool_to_ulogic_f(unsigned(fetch_pc_i(XLEN-1 downto pmp_lsb_c)) <  unsigned(pmp_addr_i(r-0)(XLEN-1 downto pmp_lsb_c)));
-        pmp.d_cmp_ge(r) <= bool_to_ulogic_f(unsigned(    addr_i(XLEN-1 downto pmp_lsb_c)) >= unsigned(pmp_addr_i(r-1)(XLEN-1 downto pmp_lsb_c)));
-        pmp.d_cmp_lt(r) <= bool_to_ulogic_f(unsigned(    addr_i(XLEN-1 downto pmp_lsb_c)) <  unsigned(pmp_addr_i(r-0)(XLEN-1 downto pmp_lsb_c)));
-      end if;
-    end loop; -- r
+	 if (PMP_NUM_REGIONS > 0) then
+		 for r in 0 to PMP_NUM_REGIONS-1 loop
+			if (r = 0) then -- first entry: use ZERO as base and current entry as bound
+			  pmp.i_cmp_ge(r) <= '1'; -- address is always greater than or equal to zero
+			  pmp.i_cmp_lt(r) <= '0'; -- unused
+			  pmp.d_cmp_ge(r) <= '1'; -- address is always greater than or equal to zero
+			  pmp.d_cmp_lt(r) <= '0'; -- unused
+			else -- use previous entry as base and current entry as bound
+			  pmp.i_cmp_ge(r) <= bool_to_ulogic_f(unsigned(fetch_pc_i(XLEN-1 downto pmp_lsb_c)) >= unsigned(pmp_addr_i(r-1)(XLEN-1 downto pmp_lsb_c)));
+			  pmp.i_cmp_lt(r) <= bool_to_ulogic_f(unsigned(fetch_pc_i(XLEN-1 downto pmp_lsb_c)) <  unsigned(pmp_addr_i(r-0)(XLEN-1 downto pmp_lsb_c)));
+			  pmp.d_cmp_ge(r) <= bool_to_ulogic_f(unsigned(    addr_i(XLEN-1 downto pmp_lsb_c)) >= unsigned(pmp_addr_i(r-1)(XLEN-1 downto pmp_lsb_c)));
+			  pmp.d_cmp_lt(r) <= bool_to_ulogic_f(unsigned(    addr_i(XLEN-1 downto pmp_lsb_c)) <  unsigned(pmp_addr_i(r-0)(XLEN-1 downto pmp_lsb_c)));
+			end if;
+		 end loop; -- r
+	 end if;
   end process pmp_check_address;
 
 
   -- check mode --
   pmp_check_mode: process(pmp_ctrl_i, pmp)
   begin
-    for r in 0 to PMP_NUM_REGIONS-1 loop
-      if (pmp_ctrl_i(r)(pmp_cfg_ah_c downto pmp_cfg_al_c) = pmp_mode_tor_c) then -- TOR mode
-        if (r < (PMP_NUM_REGIONS-1)) then
-          -- this saves a LOT of comparators --
-          pmp.i_match(r) <= pmp.i_cmp_ge(r) and (not pmp.i_cmp_ge(r+1));
-          pmp.d_match(r) <= pmp.d_cmp_ge(r) and (not pmp.d_cmp_ge(r+1));
-        else -- very last entry
-          pmp.i_match(r) <= pmp.i_cmp_ge(r) and pmp.i_cmp_lt(r);
-          pmp.d_match(r) <= pmp.d_cmp_ge(r) and pmp.d_cmp_lt(r);
-        end if;
-      else -- entry disabled
-        pmp.i_match(r) <= '0';
-        pmp.d_match(r) <= '0';
-      end if;
-    end loop; -- r
+	 if (PMP_NUM_REGIONS > 0) then
+		 for r in 0 to PMP_NUM_REGIONS-1 loop
+			if (pmp_ctrl_i(r)(pmp_cfg_ah_c downto pmp_cfg_al_c) = pmp_mode_tor_c) then -- TOR mode
+			  if (r < (PMP_NUM_REGIONS-1)) then
+				 -- this saves a LOT of comparators --
+				 pmp.i_match(r) <= pmp.i_cmp_ge(r) and (not pmp.i_cmp_ge(r+1));
+				 pmp.d_match(r) <= pmp.d_cmp_ge(r) and (not pmp.d_cmp_ge(r+1));
+			  else -- very last entry
+				 pmp.i_match(r) <= pmp.i_cmp_ge(r) and pmp.i_cmp_lt(r);
+				 pmp.d_match(r) <= pmp.d_cmp_ge(r) and pmp.d_cmp_lt(r);
+			  end if;
+			else -- entry disabled
+			  pmp.i_match(r) <= '0';
+			  pmp.d_match(r) <= '0';
+			end if;
+		 end loop; -- r
+	 end if;
   end process pmp_check_mode;
 
 
   -- check permission --
   pmp_check_permission: process(ctrl_i, pmp_ctrl_i)
   begin
-    for r in 0 to PMP_NUM_REGIONS-1 loop
+	 if (PMP_NUM_REGIONS > 0) then
+		 for r in 0 to PMP_NUM_REGIONS-1 loop
 
-      -- instruction fetch access --
-      if (ctrl_i(ctrl_priv_mode_c) = priv_mode_m_c) then -- M mode: always allow if lock bit not set, otherwise check permission
-        pmp.perm_ex(r) <= (not pmp_ctrl_i(r)(pmp_cfg_l_c)) or pmp_ctrl_i(r)(pmp_cfg_x_c);
-      else -- U mode: always check permission
-        pmp.perm_ex(r) <= pmp_ctrl_i(r)(pmp_cfg_x_c);
-      end if;
- 
-      -- load/store accesses from M mod (can also use U mode's permissions if MSTATUS.MPRV is set) --
-      if (ctrl_i(ctrl_bus_priv_c) = priv_mode_m_c) then -- M mode: always allow if lock bit not set, otherwise check permission
-        pmp.perm_rd(r) <= (not pmp_ctrl_i(r)(pmp_cfg_l_c)) or pmp_ctrl_i(r)(pmp_cfg_r_c);
-        pmp.perm_wr(r) <= (not pmp_ctrl_i(r)(pmp_cfg_l_c)) or pmp_ctrl_i(r)(pmp_cfg_w_c);
-      else -- U mode: always check permission
-        pmp.perm_rd(r) <= pmp_ctrl_i(r)(pmp_cfg_r_c);
-        pmp.perm_wr(r) <= pmp_ctrl_i(r)(pmp_cfg_w_c);
-      end if;
- 
-    end loop; -- r
+			-- instruction fetch access --
+			if (ctrl_i(ctrl_priv_mode_c) = priv_mode_m_c) then -- M mode: always allow if lock bit not set, otherwise check permission
+			  pmp.perm_ex(r) <= (not pmp_ctrl_i(r)(pmp_cfg_l_c)) or pmp_ctrl_i(r)(pmp_cfg_x_c);
+			else -- U mode: always check permission
+			  pmp.perm_ex(r) <= pmp_ctrl_i(r)(pmp_cfg_x_c);
+			end if;
+	 
+			-- load/store accesses from M mod (can also use U mode's permissions if MSTATUS.MPRV is set) --
+			if (ctrl_i(ctrl_bus_priv_c) = priv_mode_m_c) then -- M mode: always allow if lock bit not set, otherwise check permission
+			  pmp.perm_rd(r) <= (not pmp_ctrl_i(r)(pmp_cfg_l_c)) or pmp_ctrl_i(r)(pmp_cfg_r_c);
+			  pmp.perm_wr(r) <= (not pmp_ctrl_i(r)(pmp_cfg_l_c)) or pmp_ctrl_i(r)(pmp_cfg_w_c);
+			else -- U mode: always check permission
+			  pmp.perm_rd(r) <= pmp_ctrl_i(r)(pmp_cfg_r_c);
+			  pmp.perm_wr(r) <= pmp_ctrl_i(r)(pmp_cfg_w_c);
+			end if;
+	 
+		 end loop; -- r
+	 end if;
   end process pmp_check_permission;
 
 
@@ -497,22 +503,24 @@ begin
     tmp_ld_v(PMP_NUM_REGIONS) := bool_to_ulogic_f(ctrl_i(ctrl_bus_priv_c)  /= priv_mode_m_c); -- default: fault if U mode
     tmp_st_v(PMP_NUM_REGIONS) := bool_to_ulogic_f(ctrl_i(ctrl_bus_priv_c)  /= priv_mode_m_c); -- default: fault if U mode
  
-    for r in PMP_NUM_REGIONS-1 downto 0 loop -- start with lowest priority
-      -- instruction fetch access --
-      if (pmp.i_match(r) = '1') then -- address matches region r
-        tmp_if_v(r) := not pmp.perm_ex(r); -- fault if no execute permission
-      else
-        tmp_if_v(r) := tmp_if_v(r+1);
-      end if;
-      -- data load/store access --
-      if (pmp.d_match(r) = '1') then -- address matches region r
-        tmp_ld_v(r) := not pmp.perm_rd(r); -- fault if no read permission
-        tmp_st_v(r) := not pmp.perm_wr(r); -- fault if no write permission
-      else
-        tmp_ld_v(r) := tmp_ld_v(r+1);
-        tmp_st_v(r) := tmp_st_v(r+1);
-      end if;
-    end loop; -- r
+	 if (PMP_NUM_REGIONS > 0) then
+		 for r in PMP_NUM_REGIONS-1 downto 0 loop -- start with lowest priority
+			-- instruction fetch access --
+			if (pmp.i_match(r) = '1') then -- address matches region r
+			  tmp_if_v(r) := not pmp.perm_ex(r); -- fault if no execute permission
+			else
+			  tmp_if_v(r) := tmp_if_v(r+1);
+			end if;
+			-- data load/store access --
+			if (pmp.d_match(r) = '1') then -- address matches region r
+			  tmp_ld_v(r) := not pmp.perm_rd(r); -- fault if no read permission
+			  tmp_st_v(r) := not pmp.perm_wr(r); -- fault if no write permission
+			else
+			  tmp_ld_v(r) := tmp_ld_v(r+1);
+			  tmp_st_v(r) := tmp_st_v(r+1);
+			end if;
+		 end loop; -- r
+	 end if;
     pmp.if_fault <= tmp_if_v(0);
     pmp.ld_fault <= tmp_ld_v(0);
     pmp.st_fault <= tmp_st_v(0);
